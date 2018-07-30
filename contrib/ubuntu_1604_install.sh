@@ -1,6 +1,6 @@
 # Configure system libs
-sudo apt-get autoremove -y install-info 
-sudo add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
+#sudo apt-get autoremove -y install-info 
+#sudo add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
 sudo apt-get update
 sudo apt-get install -y python-dev libpq-dev gdal-bin libgdal-dev libproj-dev python-virtualenv python3-dev git binutils libproj-dev
 
@@ -19,6 +19,7 @@ sudo apt-get install -y postgresql-9.6
 sudo apt-get install -y postgresql-9.6-postgis-2.3
 sudo apt-get install -y python-psycopg2
 sudo -u postgres bash -c "psql -c \"CREATE USER postgres WITH PASSWORD 'postgres';\""
+sudo -u postgres bash -c "psql -c \"ALTER USER postgres WITH PASSWORD 'postgres';\""
 sudo -u postgres bash -c "psql -c \"ALTER ROLE postgres WITH SUPERUSER;\""
 sudo -u postgres createdb -O postgres webodm_dev -E utf-8
 sudo -u postgres bash -c "psql -d webodm_dev -c \"CREATE EXTENSION postgis;\""
@@ -41,21 +42,34 @@ virtualenv -p python3 env
 . env/bin/activate
 
 # Clone Repository and change folder
-git clone https://github.com/OpenDroneMap/WebODM
+git clone https://github.com/fragofer/WebODM
 cd WebODM/
 
 pip install -r requirements.txt
 
 # Build assets
-sudo npm install -g webpack
+sudo npm install -g webpack@3.11.0
 npm install
 webpack
 python manage.py collectstatic --noinput
 
-# Configure Docker (Processing Nodes)
-sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-sudo apt-add-repository 'deb https://apt.dockerproject.org/repo ubuntu-xenial main'
-sudo apt-get update
-sudo apt-get install -y docker-engine
-sudo systemctl status docker
-sudo usermod -aG docker $(whoami)
+# Redis server
+sudo apt install redis-server
+redis-server &
+
+# Start at least one celery worker
+./worker.sh start &
+
+# Start WebODM. Remove '--no-gunicorn' to run in production using nginx
+chmod +x start.sh && ./start.sh --no-gunicorn 
+
+
+if [ "$1" = "--use-docker"]; then
+  # Configure Docker (Processing Nodes)
+  sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+  sudo apt-add-repository 'deb https://apt.dockerproject.org/repo ubuntu-xenial main'
+  sudo apt-get update
+  sudo apt-get install -y docker-engine
+  sudo systemctl status docker
+  sudo usermod -aG docker $(whoami)
+fi
